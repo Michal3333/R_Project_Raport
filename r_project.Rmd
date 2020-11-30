@@ -1,35 +1,479 @@
 ---
-title: "R_Project"
+title: "R Project Report"
 knit: (function(input_file, encoding) {
   out_dir <- 'docs';
   rmarkdown::render(input_file,
  encoding=encoding,
  output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
 author: "Michal Rajczak"
-date: "11/30/2020"
-output: html_document
+date: "11/24/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+
+library(readxl)
+library(openxlsx)
+library(tibble)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(crosstalk)
+library(plotly)
+library(corrplot)
+library(caret)
+library(rstatix)
+library(reshape2)
+set.seed(23)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
+
+
+```{r wczytanie, cache=TRUE}
+
+df <- read.xlsx(
+  "http://www.cs.put.poznan.pl/dbrzezinski/teaching/zed/wuhan_blood_sample_data_Jan_Feb_2020.xlsx",
+  fillMergedCells = TRUE,
+  check.names = TRUE,
+  sep.names = "_")
+
 ```
 
-## Including Plots
+```{r wstepne_przetwarzanie}
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+df <- tibble(df) %>%
+  mutate(RE_DATE = openxlsx::convertToDateTime(RE_DATE)) %>% 
+  mutate(Admission_time = openxlsx::convertToDateTime(Admission_time)) %>% 
+  mutate(Discharge_time = openxlsx::convertToDateTime(Discharge_time))
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r zamiana_setu, cache=TRUE}
+parsed_df <- data.frame(PatientID=character(), date=as.POSIXct(character()), testName=character(), testValue=numeric())
+
+firstcol = which(colnames(df)=="Hypersensitive_cardiac_troponinI")
+lastcol = which(colnames(df)=="creatinine")
+examinationsCols <- colnames(df[c(firstcol:lastcol)])
+for(row in 1:nrow(df)){
+  patientID <- df[row, 'PATIENT_ID']
+  date <- df[row, 'RE_DATE']
+  outcome <- as.numeric(df[row, 'outcome'])
+  for(col in examinationsCols){
+    if(!is.na(df[row, col])){
+      parsed_df[nrow(parsed_df) + 1,] = c(patientID,date, col, as.numeric(df[row, col]))
+    }
+  }
+}
+parsed_df <- tibble(parsed_df)
+```
+
+
+```{r}
+patientsData <- df %>% 
+  group_by(PATIENT_ID) %>% 
+  filter(row_number()==1) %>% 
+  ungroup() %>% 
+  select(PATIENT_ID, age : outcome) %>% 
+  rename(PatientID = PATIENT_ID) %>% 
+  mutate(PatientID = as.factor(PatientID))
+
+
+```
+
+```{r}
+patientDataReadable <- patientsData %>% 
+  mutate(gender = recode(gender, `1` = 'Male', `2` = 'Female')) %>% 
+  mutate(outcome = recode(outcome, `0` = 'Survived', `1` = 'Died'))
+```
+
+```{r}
+liczbaPacjentow <- patientDataReadable %>% 
+  summarise(liczba = n())
+
+liczbaPacjentow <- as.numeric(liczbaPacjentow[1,1])
+
+liczbaPacjentowPlec <- patientDataReadable %>% 
+  group_by(gender) %>% 
+  summarise(liczba = n())
+
+liczbaKobiet <- as.numeric(liczbaPacjentowPlec[1,2])
+liczbaMezczyzn <- as.numeric(liczbaPacjentowPlec[2,2])
+
+liczbaPacjentowSmierc <- patientDataReadable %>% 
+  group_by(outcome) %>% 
+  summarise(liczba = n())
+
+smierc_tak <- as.numeric(liczbaPacjentowSmierc[1,2])
+smierc_nie <- as.numeric(liczbaPacjentowSmierc[2,2])
+
+```
+# Wstęp
+summary potem
+
+# Charakterystyka  danych
+Zbiór danych składał się ze zbioru badań `r liczbaPacjentow` pacjentów przy czym każde badanie składało się z wybranych testów oraz daty wykonania badania. Dodatkowo każdy z pacjentów był opisany przez wiek, płeć, date przyjęcia do szpitala, datę opuszczenia szpitala oraz parametr określający czy pacjent przeżył. Podstawowe statystyki związanze z konkretnymi badaniami zostały przedstawione ponieżej.
+
+## Podstawowe statystyki testów
+```{r}
+knitr::kable(t(summary(select(df, all_of(examinationsCols)))))
+```
+## Analiza danych o pacjentach
+Zbiór danych zawiera dane o `r liczbaKobiet` kobietach oraz `r liczbaMezczyzn` mężczyznach, `r smierc_tak` pacjentów zmarło a `r smierc_nie` przeżyło. Poniższe wykresy pokazują porównania ilości pacjentów w zależnoci od płci, grupy wiekowej oraz śmiertelności.
+```{r smierć_plec_plot}
+patientDataReadable %>% 
+  group_by(gender, outcome) %>% 
+  summarise(total = n()) %>% 
+  ggplot(aes(fill=outcome, y=total, x=gender)) +
+    geom_bar(position="dodge", stat="identity") +
+    ggtitle('Wyk.1 Porównanie śmiertelności kobiet i mężczyzn') +
+    xlab('Płeć') +
+    ylab('Ilość')
+```
+
+```{r}
+patientDataReadable %>% 
+  mutate(ageGroup = floor(age / 10)) %>% 
+  mutate(ageGroup = recode(ageGroup, `0` = '1-9', `1` = '10-19', `2` = '20-29', `3` = '30-39', `4` = '40-49', `5` = '50-59', `6` = '60-69', `7` = '70-79', `8` = '80-89', `9` = '90-99')) %>% 
+  group_by(ageGroup, gender) %>% 
+  summarise(total = n()) %>% 
+  ggplot(aes(fill=gender, y=total, x=ageGroup)) +
+    geom_bar(position="dodge", stat="identity") +
+     ggtitle('Wyk.2 Porównanie wieku i płci') +
+    xlab('Grupa wiekowa') +
+    ylab('Ilość')
+```
+
+```{r}
+patientDataReadable %>% 
+  mutate(ageGroup = floor(age / 10)) %>% 
+  mutate(ageGroup = recode(ageGroup, `0` = '1-9', `1` = '10-19', `2` = '20-29', `3` = '30-39', `4` = '40-49', `5` = '50-59', `6` = '60-69', `7` = '70-79', `8` = '80-89', `9` = '90-99')) %>% 
+  group_by(ageGroup, outcome) %>% 
+  summarise(total = n()) %>% 
+  ggplot(aes(fill=outcome, y=total, x=ageGroup)) +
+    geom_bar(position="dodge", stat="identity") +
+  ggtitle('Wyk.3 Porównanie śmiertelności i wieku') +
+    xlab('Grupa wiekowa') +
+    ylab('Ilość')
+```
+
+Analizując wykres Wyk.3, mogło by się wydawać że śmiertelność wśród kobiet jest zauważalnie mniejsza niż wśród mężczyzn ale fakt ten wynika raczej z tego że wśród pacjentów w wieku 50+ więkość stanowią mężczyźni (co pokazuje wykres Wyk.2) a właśnie dla wieku 50+ śmiertelność drastycznie rośnie (co pokazuje wykres Wyk.3). Podsumowując ze względu na nie równe rozłożenie płci pacjentów wśród group wiekowych nie będę wykorzystywał tego parametru w dalszej analizie, ponadto wykres Wyk.3 pokazuje że wiek pacjenta ma ogrmony wpływ na to czy pacjetowi uda się przeżyć.
+
+
+
+```{r}
+parsed_df <-  parsed_df %>% 
+  mutate(PatientID = as.factor(PatientID))
+```
+
+```{r}
+outcome_age <- patientsData %>% 
+  select(PatientID, outcome,age)
+
+df_10pat <- parsed_df %>% 
+  left_join(outcome_age) %>% 
+  mutate(outcome = recode(outcome, `0` = 'Tak', `1` = 'Nie')) %>% 
+  rename(przeżył = outcome) %>% 
+  filter(testName != 'X2019.nCoV_nucleic_acid_detection')
+```
+
+# Wykresy historii badań
+
+
+Poniższy wykres pozwala porównać historię wyników wybranych badań dla wybranego pacjetna w czasie.
+```{r fig.height=8, fig.width=8}
+
+tx <- highlight_key(df_10pat)
+
+# gg <- tx %>%
+#   ggplot(aes( x = date, shape=przeżył)) +
+#   geom_point(aes(y = testValue, group=testName, colour=testName)) +
+#   geom_line(aes(y = testValue, group=testName, colour=testName)) +
+#   theme(legend.position="top") +
+#   ggtitle('Wykres historii dla jednego pacjenta ') +
+#     xlab('Data') +
+#     ylab('Wartość testu')
+# 
+# filter_checkbox("outcome1", "Przeżył", tx, ~przeżył )
+# filter_select("testInput", "Badanie", tx, ~testName)
+# filter_select("patientInput", "Id pacjetna", tx, ~PatientID, multiple=FALSE)
+# 
+# ggplotly(gg, dynamicTicks = TRUE) %>%
+#   layout(legend = list(orientation = "h",xanchor = "center",x = 0.8,  yanchor="top", y=-0.2))
+
+```
+
+Poniższy wyres pozwala porównać historię wyników wybranego badania dla pacjetów określonych przez wiek i parametr określający czy pacjent przeżył. Oś ox pokazuje ilość godzin od pierwszego badania żeby możliwe było porównie wyników badań pacjentów przyjętych w różnym czasie.
+
+```{r}
+df_noTime <- df_10pat %>%
+  group_by(PatientID, testName) %>%
+  mutate(date = as.numeric(as.numeric(date - first(date)) / 3600)) %>%
+  ungroup()
+
+```
+
+```{r fig.height=8, fig.width=8}
+tx1 <- highlight_key(df_noTime)
+
+# gg1 <- tx1 %>%
+#   ggplot(aes( x = date, shape=przeżył)) +
+#   geom_point(aes(y = testValue, group=PatientID, colour=PatientID)) +
+#   geom_line(aes(y = testValue, group=PatientID, colour=PatientID)) +
+#   theme(legend.position="top") +
+#   ggtitle('Wyrkes porównujący wyniki pacjentów') +
+#     xlab('Ilość godzin od pierwszego badania') +
+#     ylab('Wartość testu')
+# 
+# filter_checkbox("outcome2", "Przeżył", tx1, ~przeżył)
+# filter_select("testInputCompare", "Badanie", tx1, ~testName, multiple=FALSE)
+# filter_slider("ageCompare", "Wiek", tx1, ~age, width = "50%")
+# 
+# ggplotly(gg1, dynamicTicks = TRUE) %>%
+#   layout(legend = list(orientation = "h",xanchor = "center",x = 0.8, yanchor="top", y=-0.2))
+
+```
+
+# Badanie Korelacji
+W tej sekcji została zbadana korelacja między przeżywalnościa a pierwszym i ostatnim wynikiem poszczegolnych testów dla każdego pacjetna, dzięki temu możliwe było sprawdzenie zależności wartości poszczególnych testów na śmiertelność na wczesnym i późnym etapie infekcji. Poniższe wykresy pokazują 10 testów z najwyższa korelacją do przeżywalności dla pierwzych i ostatnich pomiarów. 
+
+```{r}
+lastValues <- parsed_df %>% 
+  group_by(PatientID, testName) %>% 
+  arrange(date) %>% 
+  filter(row_number()==n()) %>%
+  ungroup()
+
+```
+
+```{r}
+firstValues <- parsed_df %>% 
+  group_by(PatientID, testName) %>% 
+  arrange(date) %>% 
+  filter(row_number()==1) %>%
+  ungroup()
+
+```
+
+
+
+
+```{r message=FALSE}
+generateDataForCorBasedOnSet <- function (df_type){
+  filterdCols <- lapply(examinationsCols, function(colname){
+  df_type %>% 
+    filter(testName ==  colname) %>% 
+    mutate("{colname}" := testValue) %>% 
+    select(-date, -testName, -testValue)
+  })
+  joind_with_patient <- patientsData
+  for(col in filterdCols){
+    joind_with_patient <- joind_with_patient %>% 
+      left_join(col)
+  }
+  joind_with_patient
+}
+
+
+```
+
+```{r fig.height=30, fig.width=30, out.width="150%"}
+dataForCorFirst <- generateDataForCorBasedOnSet(firstValues)
+corsDataFirst <- dataForCorFirst %>% 
+  select(-PatientID, -Admission_time, -Discharge_time)
+corsFirst <- cor(corsDataFirst, use = "pairwise.complete.obs")
+
+dataForCorLast <- generateDataForCorBasedOnSet(lastValues)
+corsDataLast <- dataForCorLast %>% 
+  select(-PatientID, -Admission_time, -Discharge_time)
+corsLast <- cor(corsDataLast, use = "pairwise.complete.obs")
+```
+
+```{r}
+genereteHighestCorPlot <- function(correlations, count, title){
+  cor_df <- as.data.frame.matrix(correlations)
+
+  cor_outcome_df <- cor_df %>% 
+    select(outcome)
+  
+  cor_outcome_df <- cbind(rownames(cor_outcome_df), data.frame(cor_outcome_df, row.names=NULL))
+  colnames(cor_outcome_df)[1] <- "test"
+  
+  cor_outcome_df <- cor_outcome_df %>% 
+    rename(value = outcome) %>% 
+    mutate(absValue = abs(value)) %>% 
+    arrange(desc(absValue)) %>%
+    filter(between(row_number(),2,count + 1))
+  
+  cor_outcome_df %>% 
+    ggplot(aes(x=reorder(test, absValue), y=value, fill=value))+
+    geom_bar(stat='identity', width=.5) + 
+    scale_y_continuous(limits = c(-0.9, 0.9))+
+    coord_flip() +
+    ggtitle(title) +
+    xlab('Nazwa Badania') +
+    ylab('Korelacja')
+   
+}  
+
+```
+
+```{r}
+corsFirstPlot <- genereteHighestCorPlot(corsFirst, 10, 'Korelacja dla pierwszych pomiarów');
+corsFirstPlot
+```
+```{r}
+corsLastPlot <- genereteHighestCorPlot(corsLast, 10, 'Korelacja dla ostatnich pomiarów');
+corsLastPlot
+```
+
+Porównując powższe wykresy można zauważyć że korelacja dla ostanich badań jest większa niż dla pierwszych może to wynikać z faktu że ostatnie badnie dla pacjenta który przeżył często będzie przeprowadzane gdy pacjent jest już w lepszym stanie natomiast dla pacjentów którym przeżyć się nie udało ostatnie badanie odbywa się kiedy pacjent jest w najgorszym stanie dlatego różnica w wynikach tych dwóch group pacjetów jest największa. Warto też zauważyć że wśród 10 najwyższych korelacji dla pierwszych badań jest wiek natomiast dla ostatnich już go nie ma, powodowane jest to tym że w miarę rozwoju choroby wiek pacjenta warunkuje zachowanie organizmu a tym samym wpływa na wyniki innych testów które ostatecznie decydują czy pacjent przeżyje.
+
+# Klasyfikacja 
+
+Przy przeprowadzeniu klasyfikacji postanowiłem korzystać ze zbioru pierwszych wyników. Taka klasyfikacja ma zdecydowanie większy sens ponieważ pozwala na wczesnym etapie choroby wskazać pacjetów bardziej narażonych na śmierć. Gdybyśmy badali ostatanie testy, wyniki pewnie byłyby lepsze ponieważ różniece w wynikach testów pacjentów którzy wyzdrowieli lub nie wyzdrowieli są większe natomiast taka klasyfikacja ma mało sensu ponieważ byłaby tylko wstanie wskazać pacjentów narażonych na śmierć tuż przed śmiercią więc nie było by już czasu na podjęcie jakiś działań. Dodatkowo ograniczyłem zbiór badań tylko do tych którym zostało poddane minimum 85% pacjentów po to żeby nie ograniczać zbioru pacjentów z kompletem badań. 
+
+```{r}
+testCount <- lastValues %>% 
+  group_by(testName) %>% 
+  summarise(n = n())  %>% 
+  arrange(n) %>% 
+  filter(n > 330)
+
+highOccuranceTests <- as.vector(testCount$testName)
+
+
+```
+
+klasyfikacja - prygotowanie danych
+```{r}
+selectedTestCols <- highOccuranceTests
+
+classification_df <- dataForCorFirst %>%
+  select(all_of(selectedTestCols), outcome, age) %>%
+  mutate(outcome = as.factor(outcome)) %>%
+  mutate(outcome = recode(outcome, `0` = 'no', `1` = 'yes'))
+
+
+```
+klasyfikacja -podzial
+```{r}
+classification_df <- drop_na(classification_df)
+print(nrow(classification_df))
+
+inTraining <-
+    createDataPartition(
+        # atrybut do stratyfikacji
+        y = classification_df$outcome,
+        # procent w zbiorze uczącym
+        p = .75,
+        # chcemy indeksy a nie listę
+        list = FALSE)
+
+training <- classification_df[ inTraining,]
+testing  <- classification_df[-inTraining,]
+```
+klasyfikacja uczenie 
+``` {r}
+ctrl <- trainControl(
+          # powtórzona ocena krzyżowa
+          method = "repeatedcv",
+          # liczba podziałów
+          number = 10,
+          # liczba powtórzeń
+          repeats = 5)
+
+fit <- train(outcome ~ .,
+         data = training,
+         method = "rf",
+         trControl = ctrl,
+         na.action  = na.omit,
+         # Paramter dla algorytmu uczącego
+         ntree = 10)
+
+rfClasses <- predict(fit, newdata = testing)
+print(confusionMatrix(data = rfClasses, testing$outcome))
+varImp(fit, scale=FALSE)
+
+
+
+
+```
+optymzalizajca parametrów
+```{r}
+rfGrid <- expand.grid(mtry = 3:length(selectedTestCols))
+gridCtrl <- trainControl(
+    method = "repeatedcv",
+    summaryFunction = twoClassSummary,
+    classProbs = TRUE,
+    number = 10,
+    repeats = 5)
+
+set.seed(23)
+
+fitTune <- train(outcome ~ .,
+             data = training,
+             method = "rf",
+             metric = "ROC",
+             preProc = c("center", "scale"),
+             trControl = gridCtrl,
+             tuneGrid = rfGrid,
+             ntree = 30)
+print(fitTune)
+rfClassesTune <- predict(fitTune, newdata = testing)
+confusionMatrix(data = rfClassesTune, testing$outcome)
+varImp(fitTune, scale=FALSE)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{js}
+function filter_default() {
+    document.getElementById("patientInput").getElementsByClassName("selectized")[0].selectize.setValue("1", false);
+    document.getElementById("testInputCompare").getElementsByClassName("selectized")[0].selectize.setValue("X...lymphocyte", false);
+    document.getElementById("testInput").getElementsByClassName("selectized")[0].selectize.setValue("X...lymphocyte", false);
+}
+window.onload = filter_default;
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
