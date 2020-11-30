@@ -117,9 +117,9 @@ smierc_nie <- as.numeric(liczbaPacjentowSmierc[2,2])
 
 ```
 # Wstęp
-Celem rapotu było sprawdzenie wpływu wartości wyników badania krwi na śmiertelność COVID-19, więcej informacji na temat samych badań oraz ich przeprowadzania można znaleźć w  [tym artykule](https://www.nature.com/articles/s42256-020-0180-7). 
+Celem raportu było sprawdzenie wpływu wartości wyników badania krwi na śmiertelność COVID-19, więcej informacji na temat samych badań oraz ich przeprowadzania można znaleźć w  [tym artykule](https://www.nature.com/articles/s42256-020-0180-7). 
 
-Raport składa się z przedstawienia danych, zbadania korelacji między smiertelnością a wynikami poszczególnych badań oraz próbą zbudowania klasyfikatora który na podstawie wyników badań na wczesnym etapie choroby będzie w stanie wskazać pacjentów z większą szansą na zgon. Analiza pokazała że największy wpływ na śmiertelność maja te badania: okazały sie pomiary Lactate_dehydrogenase, X...lymphocyte, neutrophils_count, neutrophils... oraz wiek.
+Raport składa się z przedstawienia danych, zbadania korelacji między smiertelnością a wynikami poszczególnych badań oraz próbą zbudowania klasyfikatora który na podstawie wyników badań na wczesnym etapie choroby będzie w stanie wskazać pacjentów z większą szansą na zgon. Analiza pokazała że największy wpływ na śmiertelność maja te badania: Lactate_dehydrogenase, X...lymphocyte, neutrophils_count, neutrophils... oraz wiek.
 
 # Wykorzystane pakiety
 ```{r}
@@ -242,7 +242,7 @@ gg1 <- tx1 %>%
 
 filter_checkbox("outcome2", "Przeżył", tx1, ~przeżył)
 filter_select("testInputCompare", "Badanie", tx1, ~testName, multiple=FALSE)
-filter_slider("ageCompare", "Wiek", tx1, ~age, width = "50%")
+filter_slider("ageCompare", "Wiek", tx1, ~age, width = "70%")
 
 ggplotly(gg1, dynamicTicks = TRUE) %>%
   layout(legend = list(orientation = "h",xanchor = "center",x = 0.8, yanchor="top", y=-0.2))
@@ -417,7 +417,7 @@ Powyższy model uzyskał Accuracy = 0.859, przy czym poniższe parametry miały 
 varImp(fit, scale=FALSE)
 ```
 
-Następnie dokonałem optymlizacji parametrów uczenia  wybierając tune metic = ROC, tune grid = 3:`r length(selectedTestCols)` oraz preprocesing = center, scale;
+Następnie dokonałem optymlizacji parametrów uczenia  wybierając tune metric = ROC, tune grid = 3:`r length(selectedTestCols)` oraz preprocesing = center, scale;
 ```{r}
 rfGrid <- expand.grid(mtry = 3:length(selectedTestCols))
 gridCtrl <- trainControl(
@@ -444,7 +444,7 @@ Optymalizacja spowodowała poprawie accuracy o trochę ponad 4%, zmieniając ró
 varImp(fitTune, scale=FALSE)
 ```
 
-W przypadku klasyfikacji z optymalizają i bez najważniejsze okazały sie pomiary Lactate_dehydrogenase, X...lymphocyte, neutrophils_count, neutrophils... oraz wiek. Patrzac na wykres poniżej przedstawuający zależność między Lactate_dehydrogenasei i X...lymphocyte a śmiercią pacjetna wydaję się że wybór parametrów przez klasyfikacje jest sensowny.
+W przypadku klasyfikacji z optymalizacją i bez najważniejsze okazały sie pomiary Lactate_dehydrogenase, X...lymphocyte, neutrophils_count, neutrophils... oraz wiek. Patrząc na wykres poniżej przedstawiający zależność między Lactate_dehydrogenasei i X...lymphocyte a śmiercią pacjetna wydaję się że wybór parametrów przez klasyfikacje jest sensowny.
 ```{r}
 best <- dataForCorFirst %>%
   select(outcome, Lactate_dehydrogenase, X...lymphocyte) %>% 
