@@ -89,8 +89,10 @@ patientsData <- df %>%
 
 ```{r}
 patientDataReadable <- patientsData %>% 
-  mutate(gender = recode(gender, `1` = 'Male', `2` = 'Female')) %>% 
-  mutate(outcome = recode(outcome, `0` = 'Survived', `1` = 'Died'))
+  mutate(gender = recode(gender, `1` = 'Mężczyzna', `2` = 'Kobieta')) %>% 
+  mutate(outcome = recode(outcome, `0` = 'Tak', `1` = 'Nie')) %>% 
+  rename(przeżył = outcome) %>% 
+  rename(płeć = gender)
 ```
 
 ```{r}
@@ -100,14 +102,14 @@ liczbaPacjentow <- patientDataReadable %>%
 liczbaPacjentow <- as.numeric(liczbaPacjentow[1,1])
 
 liczbaPacjentowPlec <- patientDataReadable %>% 
-  group_by(gender) %>% 
+  group_by(płeć) %>% 
   summarise(liczba = n())
 
 liczbaKobiet <- as.numeric(liczbaPacjentowPlec[1,2])
 liczbaMezczyzn <- as.numeric(liczbaPacjentowPlec[2,2])
 
 liczbaPacjentowSmierc <- patientDataReadable %>% 
-  group_by(outcome) %>% 
+  group_by(przeżył) %>% 
   summarise(liczba = n())
 
 smierc_tak <- as.numeric(liczbaPacjentowSmierc[1,2])
@@ -115,22 +117,29 @@ smierc_nie <- as.numeric(liczbaPacjentowSmierc[2,2])
 
 ```
 # Wstęp
-summary potem
+Celem rapotu było sprawdzenie wpływu wartości wyników badania krwi na śmiertelność COVID-19, więcej informacji na temat samych badań oraz ich przeprowadzania można znaleźć w  [tym artykule](https://www.nature.com/articles/s42256-020-0180-7). 
+
+Raport składa się z przedstawienia danych, zbadania korelacji między smiertelnością a wynikami poszczególnych badań oraz próbą zbudowania klasyfikatora który na podstawie wyników badań na wczesnym etapie choroby będzie w stanie wskazać pacjentów z większą szansą na zgon. Analiza pokazała że największy wpływ na śmiertelność maja te badania: okazały sie pomiary Lactate_dehydrogenase, X...lymphocyte, neutrophils_count, neutrophils... oraz wiek.
+
+# Wykorzystane pakiety
+```{r}
+(.packages())
+```
 
 # Charakterystyka  danych
-Zbiór danych składał się ze zbioru badań `r liczbaPacjentow` pacjentów przy czym każde badanie składało się z wybranych testów oraz daty wykonania badania. Dodatkowo każdy z pacjentów był opisany przez wiek, płeć, date przyjęcia do szpitala, datę opuszczenia szpitala oraz parametr określający czy pacjent przeżył. Podstawowe statystyki związanze z konkretnymi badaniami zostały przedstawione ponieżej.
+Zbiór danych składał się ze zbioru badań `r liczbaPacjentow` pacjentów, przy czym każde badanie składało się z wybranych testów oraz daty wykonania badania. Dodatkowo każdy z pacjentów był opisany przez wiek, płeć, datę przyjęcia do szpitala, datę opuszczenia szpitala oraz parametr określający, czy pacjent przeżył. Podstawowe statystyki związane z konkretnymi badaniami zostały przedstawione poniżej.
 
 ## Podstawowe statystyki testów
 ```{r}
 knitr::kable(t(summary(select(df, all_of(examinationsCols)))))
 ```
 ## Analiza danych o pacjentach
-Zbiór danych zawiera dane o `r liczbaKobiet` kobietach oraz `r liczbaMezczyzn` mężczyznach, `r smierc_tak` pacjentów zmarło a `r smierc_nie` przeżyło. Poniższe wykresy pokazują porównania ilości pacjentów w zależnoci od płci, grupy wiekowej oraz śmiertelności.
+Zbiór danych zawiera informacje o `r liczbaKobiet` kobietach oraz `r liczbaMezczyzn` mężczyznach; `r smierc_tak` pacjentów zmarło a `r smierc_nie` przeżyło. Poniższe wykresy pokazują porównania liczby pacjentów w zależnoci od płci, grupy wiekowej oraz śmiertelności.
 ```{r smierć_plec_plot}
 patientDataReadable %>% 
-  group_by(gender, outcome) %>% 
+  group_by(płeć, przeżył) %>% 
   summarise(total = n()) %>% 
-  ggplot(aes(fill=outcome, y=total, x=gender)) +
+  ggplot(aes(fill=przeżył, y=total, x=płeć)) +
     geom_bar(position="dodge", stat="identity") +
     ggtitle('Wyk.1 Porównanie śmiertelności kobiet i mężczyzn') +
     xlab('Płeć') +
@@ -141,9 +150,9 @@ patientDataReadable %>%
 patientDataReadable %>% 
   mutate(ageGroup = floor(age / 10)) %>% 
   mutate(ageGroup = recode(ageGroup, `0` = '1-9', `1` = '10-19', `2` = '20-29', `3` = '30-39', `4` = '40-49', `5` = '50-59', `6` = '60-69', `7` = '70-79', `8` = '80-89', `9` = '90-99')) %>% 
-  group_by(ageGroup, gender) %>% 
+  group_by(ageGroup, płeć) %>% 
   summarise(total = n()) %>% 
-  ggplot(aes(fill=gender, y=total, x=ageGroup)) +
+  ggplot(aes(fill=płeć, y=total, x=ageGroup)) +
     geom_bar(position="dodge", stat="identity") +
      ggtitle('Wyk.2 Porównanie wieku i płci') +
     xlab('Grupa wiekowa') +
@@ -154,16 +163,16 @@ patientDataReadable %>%
 patientDataReadable %>% 
   mutate(ageGroup = floor(age / 10)) %>% 
   mutate(ageGroup = recode(ageGroup, `0` = '1-9', `1` = '10-19', `2` = '20-29', `3` = '30-39', `4` = '40-49', `5` = '50-59', `6` = '60-69', `7` = '70-79', `8` = '80-89', `9` = '90-99')) %>% 
-  group_by(ageGroup, outcome) %>% 
+  group_by(ageGroup, przeżył) %>% 
   summarise(total = n()) %>% 
-  ggplot(aes(fill=outcome, y=total, x=ageGroup)) +
+  ggplot(aes(fill=przeżył, y=total, x=ageGroup)) +
     geom_bar(position="dodge", stat="identity") +
   ggtitle('Wyk.3 Porównanie śmiertelności i wieku') +
     xlab('Grupa wiekowa') +
     ylab('Ilość')
 ```
 
-Analizując wykres Wyk.3, mogło by się wydawać że śmiertelność wśród kobiet jest zauważalnie mniejsza niż wśród mężczyzn ale fakt ten wynika raczej z tego że wśród pacjentów w wieku 50+ więkość stanowią mężczyźni (co pokazuje wykres Wyk.2) a właśnie dla wieku 50+ śmiertelność drastycznie rośnie (co pokazuje wykres Wyk.3). Podsumowując ze względu na nie równe rozłożenie płci pacjentów wśród group wiekowych nie będę wykorzystywał tego parametru w dalszej analizie, ponadto wykres Wyk.3 pokazuje że wiek pacjenta ma ogrmony wpływ na to czy pacjetowi uda się przeżyć.
+Analizując wykres Wyk.3, mogłoby się wydawać, że śmiertelność wśród kobiet jest zauważalnie mniejsza niż wśród mężczyzn ale fakt ten wynika raczej z tego że wśród pacjentów w wieku 50+ więkość stanowią mężczyźni (co pokazuje wykres Wyk.2) a właśnie dla wieku 50+ śmiertelność drastycznie rośnie (co pokazuje wykres Wyk.3). Podsumowując ze względu na nierówne rozłożenie płci pacjentów wśród grup wiekowych nie będę wykorzystywał tego parametru w dalszej analizie. Należy zwrócić uwagę wykres Wyk.3 wskazuje, że wiek pacjenta ma ogromny wpływ na to, czy pacjentowi uda się przeżyć.
 
 
 
@@ -186,7 +195,7 @@ df_10pat <- parsed_df %>%
 # Wykresy historii badań
 
 
-Poniższy wykres pozwala porównać historię wyników wybranych badań dla wybranego pacjetna w czasie.
+Poniższy wykres pozwala porównać historię wyników wybranych badań dla wybranego pacjenta w czasie.
 ```{r fig.height=8, fig.width=8}
 
 tx <- highlight_key(df_10pat)
@@ -209,7 +218,7 @@ ggplotly(gg, dynamicTicks = TRUE) %>%
 
 ```
 
-Poniższy wyres pozwala porównać historię wyników wybranego badania dla pacjetów określonych przez wiek i parametr określający czy pacjent przeżył. Oś ox pokazuje ilość godzin od pierwszego badania żeby możliwe było porównie wyników badań pacjentów przyjętych w różnym czasie.
+Poniższy wyres pozwala porównać historię wyników wybranego badania dla pacjetów określonych przez wiek i parametr określający czy pacjent przeżył. Oś ox pokazuje liczbę godzin od pierwszego badania aby możliwe było porównie wyników badań pacjentów przyjętych w różnym czasie.
 
 ```{r}
 df_noTime <- df_10pat %>%
@@ -241,7 +250,7 @@ ggplotly(gg1, dynamicTicks = TRUE) %>%
 ```
 
 # Badanie Korelacji
-W tej sekcji została zbadana korelacja między przeżywalnościa a pierwszym i ostatnim wynikiem poszczegolnych testów dla każdego pacjetna, dzięki temu możliwe było sprawdzenie zależności wartości poszczególnych testów na śmiertelność na wczesnym i późnym etapie infekcji. Poniższe wykresy pokazują 10 testów z najwyższa korelacją do przeżywalności dla pierwzych i ostatnich pomiarów. 
+W tej sekcji została zbadana korelacja między przeżywalnościa a pierwszym i ostatnim wynikiem poszczegolnych testów dla każdego pacjenta. Dzięki temu możliwe było sprawdzenie zależności wyników poszczególnych testów od śmiertelność na wczesnym i późnym etapie infekcji. Poniższe wykresy pokazują 10 testów z najwyższą korelacją do przeżywalności dla pierwszych i ostatnich pomiarów. 
 
 ```{r}
 lastValues <- parsed_df %>% 
@@ -333,11 +342,11 @@ corsLastPlot <- genereteHighestCorPlot(corsLast, 10, 'Korelacja dla ostatnich po
 corsLastPlot
 ```
 
-Porównując powższe wykresy można zauważyć że korelacja dla ostanich badań jest większa niż dla pierwszych może to wynikać z faktu że ostatnie badnie dla pacjenta który przeżył często będzie przeprowadzane gdy pacjent jest już w lepszym stanie natomiast dla pacjentów którym przeżyć się nie udało ostatnie badanie odbywa się kiedy pacjent jest w najgorszym stanie dlatego różnica w wynikach tych dwóch group pacjetów jest największa. Warto też zauważyć że wśród 10 najwyższych korelacji dla pierwszych badań jest wiek natomiast dla ostatnich już go nie ma, powodowane jest to tym że w miarę rozwoju choroby wiek pacjenta warunkuje zachowanie organizmu a tym samym wpływa na wyniki innych testów które ostatecznie decydują czy pacjent przeżyje.
+Porównując powższe wykresy, można zauważyć że korelacja dla ostatnich badań jest większa niż dla pierwszych. Może to wynikać z faktu że ostatnie badanie dla pacjenta, który przeżył często będzie przeprowadzane, gdy pacjent jest już w lepszym stanie. Natomiast dla pacjentów którym przeżyć się nie udało ostatnie badanie odbywa się kiedy pacjent jest w najgorszym stanie dlatego różnica w wynikach tych dwóch grup pacjentów jest największa. Warto też zauważyć że wśród 10 najwyższych korelacji dla pierwszych badań jest wiek, natomiast dla ostatnich już go nie ma. Powodowane jest to tym, że w miarę rozwoju choroby wiek pacjenta warunkuje zachowanie organizmu, a tym samym wpływa na wyniki innych testów, które ostatecznie decydują czy, pacjent przeżyje.
 
 # Klasyfikacja 
 
-Przy przeprowadzeniu klasyfikacji postanowiłem korzystać ze zbioru pierwszych wyników. Taka klasyfikacja ma zdecydowanie większy sens ponieważ pozwala na wczesnym etapie choroby wskazać pacjetów bardziej narażonych na śmierć. Gdybyśmy badali ostatanie testy, wyniki pewnie byłyby lepsze ponieważ różniece w wynikach testów pacjentów którzy wyzdrowieli lub nie wyzdrowieli są większe natomiast taka klasyfikacja ma mało sensu ponieważ byłaby tylko wstanie wskazać pacjentów narażonych na śmierć tuż przed śmiercią więc nie było by już czasu na podjęcie jakiś działań. Dodatkowo ograniczyłem zbiór badań tylko do tych którym zostało poddane minimum 85% pacjentów po to żeby nie ograniczać zbioru pacjentów z kompletem badań. Dane testowe stanowią 30% wszystkich danych.
+
 
 ```{r}
 testCount <- lastValues %>% 
@@ -351,7 +360,7 @@ highOccuranceTests <- as.vector(testCount$testName)
 
 ```
 
-klasyfikacja - prygotowanie danych
+
 ```{r}
 selectedTestCols <- highOccuranceTests
 
@@ -362,10 +371,10 @@ classification_df <- dataForCorFirst %>%
 
 
 ```
-klasyfikacja -podzial
+
 ```{r}
 classification_df <- drop_na(classification_df)
-print(nrow(classification_df))
+patientsCount <- as.numeric(nrow(classification_df))
 
 inTraining <-
     createDataPartition(
@@ -379,7 +388,10 @@ inTraining <-
 training <- classification_df[ inTraining,]
 testing  <- classification_df[-inTraining,]
 ```
-klasyfikacja uczenie 
+
+
+Przy przeprowadzeniu klasyfikacji postanowiłem korzystać ze zbioru pierwszych wyników dla każdego pacjenta. Taka klasyfikacja ma zdecydowanie większy sens ponieważ pozwala na wczesnym etapie choroby wskazać pacjetów bardziej narażonych na śmierć. Gdybyśmy badali ostatanie testy, wyniki pewnie byłyby lepsze ponieważ różniece w wynikach testów pacjentów którzy wyzdrowieli lub nie wyzdrowieli są większe. Taka klasyfikacja ma mało sensu, ponieważ byłaby tylko wstanie wskazać pacjentów narażonych na śmierć tuż przed śmiercią, więc nie byłoby już czasu na podjęcie działań. Dodatkowo ograniczyłem zbiór badań tylko do tych którym zostało poddane minimum 85% pacjentów po to, żeby nie ograniczać zbioru pacjentów z kompletem badań tym, samym uzyskując `r patientsCount` pacjentów ze wszystkimi badaniami. Dane testowe stanowią 30% wszystkich danych. Jako metodę schematu uczenia wybrałem repeatedcv z liczbą podziałow 2 oraz liczbą powtórzeń 5. Do samego uczenia wykorzystałem model z algorytmem Random Forest z parametrem ntrees równym 30.
+
 ``` {r}
 ctrl <- trainControl(
           # powtórzona ocena krzyżowa
@@ -395,17 +407,17 @@ fit <- train(outcome ~ .,
          trControl = ctrl,
          na.action  = na.omit,
          # Paramter dla algorytmu uczącego
-         ntree = 10)
+         ntree = 30)
 
 rfClasses <- predict(fit, newdata = testing)
 print(confusionMatrix(data = rfClasses, testing$outcome))
-varImp(fit, scale=FALSE)
-
-
-
-
 ```
-optymzalizajca parametrów
+Powyższy model uzyskał Accuracy = 0.859, przy czym poniższe parametry miały największy wpływ na klasyfikacje
+```{r}
+varImp(fit, scale=FALSE)
+```
+
+Następnie dokonałem optymlizacji parametrów uczenia  wybierając tune metic = ROC, tune grid = 3:`r length(selectedTestCols)` oraz preprocesing = center, scale;
 ```{r}
 rfGrid <- expand.grid(mtry = 3:length(selectedTestCols))
 gridCtrl <- trainControl(
@@ -415,7 +427,6 @@ gridCtrl <- trainControl(
     number = 10,
     repeats = 5)
 
-set.seed(23)
 
 fitTune <- train(outcome ~ .,
              data = training,
@@ -425,11 +436,25 @@ fitTune <- train(outcome ~ .,
              trControl = gridCtrl,
              tuneGrid = rfGrid,
              ntree = 30)
-print(fitTune)
 rfClassesTune <- predict(fitTune, newdata = testing)
 confusionMatrix(data = rfClassesTune, testing$outcome)
+```
+Optymalizacja spowodowała poprawie accuracy o trochę ponad 4%, zmieniając również ważność parametrów pokazaną poniżej.
+```{r}
 varImp(fitTune, scale=FALSE)
+```
 
+W przypadku klasyfikacji z optymalizają i bez najważniejsze okazały sie pomiary Lactate_dehydrogenase, X...lymphocyte, neutrophils_count, neutrophils... oraz wiek. Patrzac na wykres poniżej przedstawuający zależność między Lactate_dehydrogenasei i X...lymphocyte a śmiercią pacjetna wydaję się że wybór parametrów przez klasyfikacje jest sensowny.
+```{r}
+best <- dataForCorFirst %>%
+  select(outcome, Lactate_dehydrogenase, X...lymphocyte) %>% 
+  mutate(outcome = recode(outcome, `0` = 'Tak', `1` = 'Nie')) %>% 
+  rename(przeżył = outcome)
+
+best <- drop_na(best)
+best %>%
+  ggplot(aes(x=Lactate_dehydrogenase)) +
+  geom_point(aes(y = X...lymphocyte, colour=przeżył))
 ```
 
 
