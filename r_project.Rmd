@@ -191,21 +191,21 @@ Poniższy wykres pozwala porównać historię wyników wybranych badań dla wybr
 
 tx <- highlight_key(df_10pat)
 
-# gg <- tx %>%
-#   ggplot(aes( x = date, shape=przeżył)) +
-#   geom_point(aes(y = testValue, group=testName, colour=testName)) +
-#   geom_line(aes(y = testValue, group=testName, colour=testName)) +
-#   theme(legend.position="top") +
-#   ggtitle('Wykres historii dla jednego pacjenta ') +
-#     xlab('Data') +
-#     ylab('Wartość testu')
-# 
-# filter_checkbox("outcome1", "Przeżył", tx, ~przeżył )
-# filter_select("testInput", "Badanie", tx, ~testName)
-# filter_select("patientInput", "Id pacjetna", tx, ~PatientID, multiple=FALSE)
-# 
-# ggplotly(gg, dynamicTicks = TRUE) %>%
-#   layout(legend = list(orientation = "h",xanchor = "center",x = 0.8,  yanchor="top", y=-0.2))
+gg <- tx %>%
+  ggplot(aes( x = date, shape=przeżył)) +
+  geom_point(aes(y = testValue, group=testName, colour=testName)) +
+  geom_line(aes(y = testValue, group=testName, colour=testName)) +
+  theme(legend.position="top") +
+  ggtitle('Wykres historii dla jednego pacjenta ') +
+    xlab('Data') +
+    ylab('Wartość testu')
+
+filter_checkbox("outcome1", "Przeżył", tx, ~przeżył )
+filter_select("testInput", "Badanie", tx, ~testName)
+filter_select("patientInput", "Id pacjetna", tx, ~PatientID, multiple=FALSE)
+
+ggplotly(gg, dynamicTicks = TRUE) %>%
+  layout(legend = list(orientation = "h",xanchor = "center",x = 0.8,  yanchor="top", y=-0.2))
 
 ```
 
@@ -222,21 +222,21 @@ df_noTime <- df_10pat %>%
 ```{r fig.height=8, fig.width=8}
 tx1 <- highlight_key(df_noTime)
 
-# gg1 <- tx1 %>%
-#   ggplot(aes( x = date, shape=przeżył)) +
-#   geom_point(aes(y = testValue, group=PatientID, colour=PatientID)) +
-#   geom_line(aes(y = testValue, group=PatientID, colour=PatientID)) +
-#   theme(legend.position="top") +
-#   ggtitle('Wyrkes porównujący wyniki pacjentów') +
-#     xlab('Ilość godzin od pierwszego badania') +
-#     ylab('Wartość testu')
-# 
-# filter_checkbox("outcome2", "Przeżył", tx1, ~przeżył)
-# filter_select("testInputCompare", "Badanie", tx1, ~testName, multiple=FALSE)
-# filter_slider("ageCompare", "Wiek", tx1, ~age, width = "50%")
-# 
-# ggplotly(gg1, dynamicTicks = TRUE) %>%
-#   layout(legend = list(orientation = "h",xanchor = "center",x = 0.8, yanchor="top", y=-0.2))
+gg1 <- tx1 %>%
+  ggplot(aes( x = date, shape=przeżył)) +
+  geom_point(aes(y = testValue, group=PatientID, colour=PatientID)) +
+  geom_line(aes(y = testValue, group=PatientID, colour=PatientID)) +
+  theme(legend.position="top") +
+  ggtitle('Wyrkes porównujący wyniki pacjentów') +
+    xlab('Ilość godzin od pierwszego badania') +
+    ylab('Wartość testu')
+
+filter_checkbox("outcome2", "Przeżył", tx1, ~przeżył)
+filter_select("testInputCompare", "Badanie", tx1, ~testName, multiple=FALSE)
+filter_slider("ageCompare", "Wiek", tx1, ~age, width = "50%")
+
+ggplotly(gg1, dynamicTicks = TRUE) %>%
+  layout(legend = list(orientation = "h",xanchor = "center",x = 0.8, yanchor="top", y=-0.2))
 
 ```
 
@@ -337,7 +337,7 @@ Porównując powższe wykresy można zauważyć że korelacja dla ostanich bada�
 
 # Klasyfikacja 
 
-Przy przeprowadzeniu klasyfikacji postanowiłem korzystać ze zbioru pierwszych wyników. Taka klasyfikacja ma zdecydowanie większy sens ponieważ pozwala na wczesnym etapie choroby wskazać pacjetów bardziej narażonych na śmierć. Gdybyśmy badali ostatanie testy, wyniki pewnie byłyby lepsze ponieważ różniece w wynikach testów pacjentów którzy wyzdrowieli lub nie wyzdrowieli są większe natomiast taka klasyfikacja ma mało sensu ponieważ byłaby tylko wstanie wskazać pacjentów narażonych na śmierć tuż przed śmiercią więc nie było by już czasu na podjęcie jakiś działań. Dodatkowo ograniczyłem zbiór badań tylko do tych którym zostało poddane minimum 85% pacjentów po to żeby nie ograniczać zbioru pacjentów z kompletem badań. 
+Przy przeprowadzeniu klasyfikacji postanowiłem korzystać ze zbioru pierwszych wyników. Taka klasyfikacja ma zdecydowanie większy sens ponieważ pozwala na wczesnym etapie choroby wskazać pacjetów bardziej narażonych na śmierć. Gdybyśmy badali ostatanie testy, wyniki pewnie byłyby lepsze ponieważ różniece w wynikach testów pacjentów którzy wyzdrowieli lub nie wyzdrowieli są większe natomiast taka klasyfikacja ma mało sensu ponieważ byłaby tylko wstanie wskazać pacjentów narażonych na śmierć tuż przed śmiercią więc nie było by już czasu na podjęcie jakiś działań. Dodatkowo ograniczyłem zbiór badań tylko do tych którym zostało poddane minimum 85% pacjentów po to żeby nie ograniczać zbioru pacjentów z kompletem badań. Dane testowe stanowią 30% wszystkich danych.
 
 ```{r}
 testCount <- lastValues %>% 
